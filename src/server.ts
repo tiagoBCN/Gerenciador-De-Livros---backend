@@ -12,6 +12,10 @@ app.use(express.json());
 app.use("/auth", authRoutes);
 app.use("/api", livroRoutes);
 
+app.get("/", (req, res) => {
+  res.send("API Gerenciador de Livros está online 🚀");
+});
+
 app.listen(3001, () => {
   console.log("🚀 Server rodando na porta 3001");
 });
