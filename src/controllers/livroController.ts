@@ -1,16 +1,40 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { prisma } from "../config/prisma.js";
 import { AuthRequest } from "../middleware/auth.js";
 
-export const getLivros = async (
-  req: AuthRequest,
-  res: Response
-) => {
-  const livros = await prisma.livro.findMany({
-    where: { userId: req.userId },
-  });
+export const getLivros = async (req: Request, res: Response) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 5;
 
-  res.json(livros);
+    const skip = (page - 1) * limit;
+
+    const [livros, total] = await Promise.all([
+      prisma.livro.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" }
+      }),
+      prisma.livro.count()
+    ]);
+
+    const lastPage = Math.ceil(total / limit);
+
+    return res.json({
+      data: livros,
+      meta: {
+        total,
+        perPage: limit,
+        currentPage: page,
+        lastPage,
+        hasNextPage: page < lastPage,
+        hasPreviousPage: page > 1
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao buscar livros" });
+  }
 };
 
 export const createLivro = async (
