@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../config/prisma.js";
 import { AuthRequest } from "../middleware/auth.js";
+import { livroSchema, livroUpdateSchema } from "../validations/livro-schema.js";
 
 export const getLivros = async (req: Request, res: Response) => {
   try {
@@ -13,12 +14,12 @@ export const getLivros = async (req: Request, res: Response) => {
       prisma.livro.findMany({
         skip,
         take: limit,
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       }),
-      prisma.livro.count()
+      prisma.livro.count(),
     ]);
 
-    const lastPage = Math.ceil(total / limit);
+    const lastPage = Math.ceil(total / limit) || 1;
 
     return res.json({
       data: livros,
@@ -28,10 +29,9 @@ export const getLivros = async (req: Request, res: Response) => {
         currentPage: page,
         lastPage,
         hasNextPage: page < lastPage,
-        hasPreviousPage: page > 1
-      }
+        hasPreviousPage: page > 1,
+      },
     });
-
   } catch (error) {
     return res.status(500).json({ error: "Erro ao buscar livros" });
   }
@@ -41,14 +41,27 @@ export const createLivro = async (
   req: AuthRequest,
   res: Response
 ) => {
-  const livro = await prisma.livro.create({
-    data: {
-      ...req.body,
-      userId: req.userId!,
-    },
-  });
+  const result = livroSchema.safeParse(req.body);
 
-  res.json(livro);
+  if (!result.success) {
+    return res.status(400).json({
+      message: "Erro de validação",
+      errors: result.error.flatten(),
+    });
+  }
+
+  try {
+    const livro = await prisma.livro.create({
+      data: {
+        ...result.data,
+        userId: req.userId!,
+      },
+    });
+
+    return res.status(201).json(livro);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao criar livro" });
+  }
 };
 
 export const updateLivro = async (
@@ -57,12 +70,25 @@ export const updateLivro = async (
 ) => {
   const { id } = req.params;
 
-  const livro = await prisma.livro.update({
-    where: { id: Number(id) },
-    data: req.body,
-  });
+  const result = livroUpdateSchema.safeParse(req.body);
 
-  res.json(livro);
+  if (!result.success) {
+    return res.status(400).json({
+      message: "Erro de validação",
+      errors: result.error.flatten(),
+    });
+  }
+
+  try {
+    const livro = await prisma.livro.update({
+      where: { id: Number(id) },
+      data: result.data,
+    });
+
+    return res.json(livro);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao atualizar livro" });
+  }
 };
 
 export const deleteLivro = async (
@@ -71,9 +97,13 @@ export const deleteLivro = async (
 ) => {
   const { id } = req.params;
 
-  await prisma.livro.delete({
-    where: { id: Number(id) },
-  });
+  try {
+    await prisma.livro.delete({
+      where: { id: Number(id) },
+    });
 
-  res.json({ message: "Livro deletado" });
+    return res.json({ message: "Livro deletado com sucesso" });
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao deletar livro" });
+  }
 };
